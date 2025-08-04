@@ -1071,12 +1071,12 @@ def extract_roblox_name(nickname: str) -> str:
 @bot.command()
 async def awardpoints(ctx, user_input: str, amount: int):
     if not any(role.id in HOST_ROLES for role in ctx.author.roles):
-        return await ctx.send("❌ You do not have permission.")
+        return await ctx.send("you do not have permission.")
 
     if amount <= 0:
-        return await ctx.send("❌ Amount must be a positive number.")
+        return await ctx.send("amount must be a positive number.")
 
-    # Resolve member
+    # resolve member
     member = None
     if user_input.startswith("<@") and user_input.endswith(">"):
         try:
@@ -1092,24 +1092,22 @@ async def awardpoints(ctx, user_input: str, amount: int):
                 break
 
     if not member:
-        return await ctx.send(f"❌ User `{user_input}` not found.")
+        return await ctx.send(f"user `{user_input}` not found.")
 
-    # ✅ Get Roblox username = last part of nickname
     if not member.display_name:
-        return await ctx.send("❌ Member has no nickname set.")
+        return await ctx.send("member has no nickname set.")
 
-    roblox_username = member.display_name.split()[-1].strip()
-
-    # ✅ Get regiment info
+    roblox_username = extract_roblox_name(member.display_name)
     info = get_regiment_info(member)
+
     if not info:
-        return await ctx.send("❌ Could not determine regiment or unsupported regiment.")
+        return await ctx.send("could not determine regiment or unsupported regiment.")
 
     sheet = main_sheet if info["sheet_type"] == "main" else special_sheet
     sheet_data = sheet.get_all_values()
     header = info["header"]
 
-    # ✅ Find section header
+    # locate header row
     header_row = None
     for idx, row in enumerate(sheet_data):
         if row[0].strip().upper() == header.upper():
@@ -1117,39 +1115,42 @@ async def awardpoints(ctx, user_input: str, amount: int):
             break
 
     if header_row is None:
-        return await ctx.send(f"❌ Header `{header}` not found in the sheet.")
+        return await ctx.send(f"header `{header}` not found in the sheet.")
 
-    # ✅ Search under the header for Roblox username
+    # search for the user
     name_row = None
     search_row = header_row + 2
     while search_row < len(sheet_data):
         row = sheet_data[search_row]
-        if not row[0].strip():  # End of block
+        if not row[0].strip():  # end of section
             break
         if row[0].strip().lower() == roblox_username.lower():
             name_row = search_row
             break
         search_row += 1
 
-    # ✅ Update or insert
+    # update or insert
     if name_row is not None:
-        current = int(sheet_data[name_row][1])
+        try:
+            current = int(sheet_data[name_row][1])
+        except (IndexError, ValueError):
+            current = 0
         total = current + amount
         sheet.update_cell(name_row + 1, 2, total)
-        sheet.update_note(name_row + 1, 1, f"Discord ID: {member.id}")
+        sheet.update_note(name_row + 1, 1, f"discord id: {member.id}")
     else:
         insert_row = search_row + 1
         sheet.insert_row([roblox_username, amount], insert_row)
-        sheet.update_note(insert_row, 1, f"Discord ID: {member.id}")
+        sheet.update_note(insert_row, 1, f"discord id: {member.id}")
         total = amount
 
     embed = discord.Embed(
-        title="✅ Merit Awarded",
+        title="merit awarded",
         description=(
-            f"👤 **{roblox_username}**\n"
-            f"🎖️ **Regiment:** {info['header']}\n"
-            f"➕ **Awarded:** {amount} points\n"
-            f"📊 **Total:** {total}"
+            f"**{roblox_username}**\n"
+            f"**regiment:** {info['header']}\n"
+            f"**awarded:** {amount} points\n"
+            f"**total:** {total}"
         ),
         color=discord.Color.green()
     )
